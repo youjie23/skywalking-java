@@ -26,11 +26,14 @@ import com.alibaba.dubbo.rpc.Result;
 import com.alibaba.dubbo.rpc.RpcContext;
 import java.lang.reflect.Method;
 import org.apache.skywalking.apm.agent.core.context.ContextCarrier;
+import org.apache.skywalking.apm.agent.core.context.SW8CarrierItem;
 import org.apache.skywalking.apm.agent.core.context.tag.Tags;
 import org.apache.skywalking.apm.agent.core.context.CarrierItem;
 import org.apache.skywalking.apm.agent.core.context.ContextManager;
 import org.apache.skywalking.apm.agent.core.context.trace.AbstractSpan;
 import org.apache.skywalking.apm.agent.core.context.trace.SpanLayer;
+import org.apache.skywalking.apm.agent.core.logging.api.ILog;
+import org.apache.skywalking.apm.agent.core.logging.api.LogManager;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.EnhancedInstance;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.InstanceMethodsAroundInterceptor;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.MethodInterceptResult;
@@ -43,6 +46,8 @@ import org.apache.skywalking.apm.util.StringUtil;
  * of dubbo framework below 2.8.3 don't support {@link RpcContext#attachments}, we support another way to support it.
  */
 public class DubboInterceptor implements InstanceMethodsAroundInterceptor {
+    private static final ILog LOGGER = LogManager.getLogger(DubboInterceptor.class);
+
     /**
      * <h2>Consumer:</h2> The serialized trace context data will
      * inject to the {@link RpcContext#attachments} for transport to provider side.
@@ -56,7 +61,7 @@ public class DubboInterceptor implements InstanceMethodsAroundInterceptor {
         Invoker invoker = (Invoker) allArguments[0];
         Invocation invocation = (Invocation) allArguments[1];
         RpcContext rpcContext = RpcContext.getContext();
-        boolean isConsumer = rpcContext.isConsumerSide();
+        boolean isConsumer = isConsumerSide(rpcContext);
         URL requestURL = invoker.getUrl();
 
         AbstractSpan span;
@@ -71,17 +76,26 @@ public class DubboInterceptor implements InstanceMethodsAroundInterceptor {
             CarrierItem next = contextCarrier.items();
             while (next.hasNext()) {
                 next = next.next();
-                rpcContext.getAttachments().put(next.getHeadKey(), next.getHeadValue());
+                if ("rest".equals(rpcContext.getUrl().getProtocol()) && SW8CarrierItem.HEADER_NAME.equals(next.getHeadKey())) {
+                    rpcContext.getAttachments().put(next.getHeadKey(), URL.encode(next.getHeadValue()));
+                } else {
+                    rpcContext.getAttachments().put(next.getHeadKey(), next.getHeadValue());
+                }
                 if (invocation.getAttachments().containsKey(next.getHeadKey())) {
                     invocation.getAttachments().remove(next.getHeadKey());
                 }
             }
+
         } else {
             ContextCarrier contextCarrier = new ContextCarrier();
             CarrierItem next = contextCarrier.items();
             while (next.hasNext()) {
                 next = next.next();
-                next.setHeadValue(rpcContext.getAttachment(next.getHeadKey()));
+                if ("rest".equals(rpcContext.getUrl().getProtocol()) && SW8CarrierItem.HEADER_NAME.equals(next.getHeadKey())) {
+                    next.setHeadValue(rpcContext.getAttachment(URL.decode(next.getHeadKey())));
+                } else {
+                    next.setHeadValue(rpcContext.getAttachment(next.getHeadKey()));
+                }
             }
 
             span = ContextManager.createEntrySpan(generateOperationName(requestURL, invocation), contextCarrier);
@@ -90,6 +104,10 @@ public class DubboInterceptor implements InstanceMethodsAroundInterceptor {
         Tags.URL.set(span, generateRequestURL(requestURL, invocation));
         span.setComponent(ComponentsDefine.DUBBO);
         SpanLayer.asRPCFramework(span);
+    }
+
+    private boolean isConsumerSide(RpcContext rpcContext) {
+        return  rpcContext.getUrl().getParameter(Constants.SIDE_KEY, Constants.PROVIDER_SIDE).equals(Constants.CONSUMER_SIDE);
     }
 
     @Override

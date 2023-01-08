@@ -22,7 +22,6 @@ import org.apache.skywalking.apm.agent.core.context.trace.AbstractSpan;
 public class EnhanceObjectCache {
     private String url;
     private AbstractSpan span;
-    private AbstractSpan span1;
 
     public String getUrl() {
         return url;
@@ -40,11 +39,4 @@ public class EnhanceObjectCache {
         return span;
     }
 
-    public void setSpan1(final AbstractSpan span) {
-        span1 = span;
-    }
-
-    public AbstractSpan getSpan1() {
-        return span1;
-    }
 }

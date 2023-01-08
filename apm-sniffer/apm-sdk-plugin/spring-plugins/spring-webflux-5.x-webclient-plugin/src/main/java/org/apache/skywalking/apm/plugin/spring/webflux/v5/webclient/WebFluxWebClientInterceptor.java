@@ -29,6 +29,7 @@ import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.v2.Method
 import org.apache.skywalking.apm.network.trace.component.ComponentsDefine;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.reactive.function.client.ClientRequest;
+import org.apache.skywalking.apm.agent.core.context.ContextSnapshot;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import reactor.core.publisher.Mono;
 
@@ -43,30 +44,30 @@ public class WebFluxWebClientInterceptor implements InstanceMethodsAroundInterce
             //illegal args,can't trace ignore
             return;
         }
-
         ClientRequest request = (ClientRequest) allArguments[0];
         final ContextCarrier contextCarrier = new ContextCarrier();
-
         URI uri = request.url();
         final String requestURIString = getRequestURIString(uri);
         final String operationName = requestURIString;
         final String remotePeer = getIPAndPort(uri);
         AbstractSpan span = ContextManager.createExitSpan(operationName, contextCarrier, remotePeer);
-
         //set components name
         span.setComponent(ComponentsDefine.SPRING_WEBCLIENT);
         Tags.URL.set(span, uri.toString());
         Tags.HTTP.METHOD.set(span, request.method().toString());
         SpanLayer.asHttp(span);
-
+        if (request instanceof EnhancedInstance) {
+            EnhancedInstance enhancedInstance = (EnhancedInstance) request;
+            if (enhancedInstance != null && enhancedInstance.getSkyWalkingDynamicField() != null) {
+                ContextManager.continued((ContextSnapshot) enhancedInstance.getSkyWalkingDynamicField());
+            }
+        }
         if (request instanceof EnhancedInstance) {
             ((EnhancedInstance) request).setSkyWalkingDynamicField(contextCarrier);
         }
-
         //user async interface
         span.prepareForAsync();
         ContextManager.stopSpan();
-
         context.setContext(span);
     }
 

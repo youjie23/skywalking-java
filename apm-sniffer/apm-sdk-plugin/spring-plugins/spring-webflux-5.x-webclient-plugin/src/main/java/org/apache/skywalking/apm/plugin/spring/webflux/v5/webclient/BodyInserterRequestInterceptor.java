@@ -34,10 +34,12 @@ public class BodyInserterRequestInterceptor implements InstanceMethodsAroundInte
                              MethodInterceptResult result) throws Throwable {
         ClientHttpRequest clientHttpRequest = (ClientHttpRequest) allArguments[0];
         ContextCarrier contextCarrier = (ContextCarrier) objInst.getSkyWalkingDynamicField();
-        CarrierItem next = contextCarrier.items();
-        while (next.hasNext()) {
-            next = next.next();
-            clientHttpRequest.getHeaders().set(next.getHeadKey(), next.getHeadValue());
+        if (contextCarrier != null) {
+            CarrierItem next = contextCarrier.items();
+            while (next.hasNext()) {
+                next = next.next();
+                clientHttpRequest.getHeaders().set(next.getHeadKey(), next.getHeadValue());
+            }
         }
     }
 

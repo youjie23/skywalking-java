@@ -17,33 +17,23 @@
 
 package org.apache.skywalking.apm.plugin.spring.cloud.gateway.v21x;
 
-import java.lang.reflect.Method;
 import org.apache.skywalking.apm.agent.core.context.ContextManager;
 import org.apache.skywalking.apm.agent.core.context.ContextSnapshot;
 import org.apache.skywalking.apm.agent.core.context.trace.AbstractSpan;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.EnhancedInstance;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.InstanceMethodsAroundInterceptor;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.MethodInterceptResult;
+import org.springframework.beans.BeanUtils;
+import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.ServerWebExchangeDecorator;
 import org.springframework.web.server.adapter.DefaultServerWebExchange;
+import java.beans.PropertyDescriptor;
+import java.lang.reflect.Method;
 
 import static org.apache.skywalking.apm.network.trace.component.ComponentsDefine.SPRING_CLOUD_GATEWAY;
 
-public class NettyRoutingFilterInterceptor implements InstanceMethodsAroundInterceptor {
-    @Override
-    public void beforeMethod(EnhancedInstance objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes,
-                             MethodInterceptResult result) throws Throwable {
-        ServerWebExchange exchange = (ServerWebExchange) allArguments[0];
-        EnhancedInstance enhancedInstance = getInstance(exchange);
-
-        AbstractSpan span = ContextManager.createLocalSpan("SpringCloudGateway/RoutingFilter");
-        if (enhancedInstance != null && enhancedInstance.getSkyWalkingDynamicField() != null) {
-            ContextManager.continued((ContextSnapshot) enhancedInstance.getSkyWalkingDynamicField());
-        }
-        span.setComponent(SPRING_CLOUD_GATEWAY);
-    }
-
+public class NormalFilterInterceptor implements InstanceMethodsAroundInterceptor {
     public static EnhancedInstance getInstance(Object o) {
         EnhancedInstance instance = null;
         if (o instanceof DefaultServerWebExchange) {
@@ -53,6 +43,42 @@ public class NettyRoutingFilterInterceptor implements InstanceMethodsAroundInter
             return getInstance(delegate);
         }
         return instance;
+    }
+
+    @Override
+    public void beforeMethod(EnhancedInstance objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes,
+                             MethodInterceptResult result) throws Throwable {
+        ServerWebExchange exchange = (ServerWebExchange) allArguments[0];
+        EnhancedInstance enhancedInstance = getInstance(exchange);
+        Class realClass = getClass(objInst);
+
+        AbstractSpan span = ContextManager.createLocalSpan("SpringCloudGateway/" + getSimpleName(realClass));
+        if (enhancedInstance != null && enhancedInstance.getSkyWalkingDynamicField() != null) {
+            ContextManager.continued((ContextSnapshot) enhancedInstance.getSkyWalkingDynamicField());
+        }
+        span.setComponent(SPRING_CLOUD_GATEWAY);
+    }
+
+    private String getSimpleName(Class realClass) {
+        String className  = realClass.getSimpleName();
+        if (StringUtils.hasText("$")) {
+            return  className.substring(0, className.indexOf("$"));
+        }
+        return realClass.getSimpleName();
+    }
+
+    private Class getClass(Object objInst) {
+        try {
+            PropertyDescriptor propertyDescriptor =
+                    BeanUtils.getPropertyDescriptor(objInst.getClass(), "delegate");
+            if (propertyDescriptor != null && propertyDescriptor.getReadMethod() != null) {
+                return getClass(propertyDescriptor.getReadMethod().invoke(objInst));
+            } else {
+                return objInst.getClass();
+            }
+        } catch (Exception e) {
+            return objInst.getClass();
+        }
     }
 
     @Override

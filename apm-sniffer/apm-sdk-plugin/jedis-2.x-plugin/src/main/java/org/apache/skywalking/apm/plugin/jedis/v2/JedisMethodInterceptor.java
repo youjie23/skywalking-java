@@ -18,17 +18,18 @@
 
 package org.apache.skywalking.apm.plugin.jedis.v2;
 
-import java.lang.reflect.Method;
-
+import org.apache.skywalking.apm.agent.core.context.ContextManager;
 import org.apache.skywalking.apm.agent.core.context.tag.Tags;
 import org.apache.skywalking.apm.agent.core.context.trace.AbstractSpan;
 import org.apache.skywalking.apm.agent.core.context.trace.SpanLayer;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.EnhancedInstance;
-import org.apache.skywalking.apm.network.trace.component.ComponentsDefine;
-import org.apache.skywalking.apm.agent.core.context.ContextManager;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.InstanceMethodsAroundInterceptor;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.MethodInterceptResult;
+import org.apache.skywalking.apm.network.trace.component.ComponentsDefine;
 import org.apache.skywalking.apm.util.StringUtil;
+
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 
 public class JedisMethodInterceptor implements InstanceMethodsAroundInterceptor {
 
@@ -37,7 +38,7 @@ public class JedisMethodInterceptor implements InstanceMethodsAroundInterceptor 
 
     @Override
     public void beforeMethod(EnhancedInstance objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes,
-        MethodInterceptResult result) throws Throwable {
+                             MethodInterceptResult result) throws Throwable {
         String peer = String.valueOf(objInst.getSkyWalkingDynamicField());
         AbstractSpan span = ContextManager.createExitSpan("Jedis/" + method.getName(), peer);
         span.setComponent(ComponentsDefine.JEDIS);
@@ -47,7 +48,12 @@ public class JedisMethodInterceptor implements InstanceMethodsAroundInterceptor 
         if (allArguments.length > 0 && allArguments[0] instanceof String) {
             Tags.DB_STATEMENT.set(span, getDBStatement(method.getName(), (String) allArguments[0]));
         } else if (allArguments.length > 0 && allArguments[0] instanceof byte[]) {
-            Tags.DB_STATEMENT.set(span, method.getName());
+            try {
+                String key = new String((byte[]) allArguments[0], StandardCharsets.UTF_8);
+                Tags.DB_STATEMENT.set(span, getDBStatement(method.getName(), key));
+            } catch (Exception e) {
+                Tags.DB_STATEMENT.set(span, method.getName());
+            }
         }
     }
 
@@ -65,14 +71,14 @@ public class JedisMethodInterceptor implements InstanceMethodsAroundInterceptor 
 
     @Override
     public Object afterMethod(EnhancedInstance objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes,
-        Object ret) throws Throwable {
+                              Object ret) throws Throwable {
         ContextManager.stopSpan();
         return ret;
     }
 
     @Override
     public void handleMethodException(EnhancedInstance objInst, Method method, Object[] allArguments,
-        Class<?>[] argumentsTypes, Throwable t) {
+                                      Class<?>[] argumentsTypes, Throwable t) {
         AbstractSpan span = ContextManager.activeSpan();
         span.log(t);
     }

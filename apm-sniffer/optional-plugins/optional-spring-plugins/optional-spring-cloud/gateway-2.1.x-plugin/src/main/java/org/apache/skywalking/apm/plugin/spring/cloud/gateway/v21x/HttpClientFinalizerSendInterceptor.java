@@ -17,9 +17,6 @@
 
 package org.apache.skywalking.apm.plugin.spring.cloud.gateway.v21x;
 
-import java.lang.reflect.Method;
-import java.net.URL;
-import java.util.function.BiFunction;
 import org.apache.skywalking.apm.agent.core.context.CarrierItem;
 import org.apache.skywalking.apm.agent.core.context.ContextCarrier;
 import org.apache.skywalking.apm.agent.core.context.ContextManager;
@@ -35,6 +32,10 @@ import org.reactivestreams.Publisher;
 import reactor.netty.NettyOutbound;
 import reactor.netty.http.client.HttpClientRequest;
 
+import java.lang.reflect.Method;
+import java.net.URL;
+import java.util.function.BiFunction;
+
 import static org.apache.skywalking.apm.network.trace.component.ComponentsDefine.SPRING_CLOUD_GATEWAY;
 
 public class HttpClientFinalizerSendInterceptor implements InstanceMethodsAroundInterceptor {
@@ -42,22 +43,16 @@ public class HttpClientFinalizerSendInterceptor implements InstanceMethodsAround
     public void beforeMethod(EnhancedInstance objInst, Method method, Object[] allArguments, Class<?>[] argumentsTypes,
                              MethodInterceptResult result) throws Throwable {
         EnhanceObjectCache enhanceObjectCache = (EnhanceObjectCache) objInst.getSkyWalkingDynamicField();
-        AbstractSpan span = ContextManager.activeSpan();
-        span.prepareForAsync();
-
         if (!StringUtil.isEmpty(enhanceObjectCache.getUrl())) {
             URL url = new URL(enhanceObjectCache.getUrl());
-
             ContextCarrier contextCarrier = new ContextCarrier();
             AbstractSpan abstractSpan = ContextManager.createExitSpan(
-                "SpringCloudGateway/sendRequest", contextCarrier, getPeer(url));
+                    "SpringCloudGateway/sendRequest", contextCarrier, getPeer(url));
             Tags.URL.set(abstractSpan, enhanceObjectCache.getUrl());
             abstractSpan.prepareForAsync();
             abstractSpan.setComponent(SPRING_CLOUD_GATEWAY);
             abstractSpan.setLayer(SpanLayer.HTTP);
             ContextManager.stopSpan(abstractSpan);
-            ContextManager.stopSpan(span);
-
             BiFunction<? super HttpClientRequest, ? super NettyOutbound, ? extends Publisher<Void>> finalSender = (BiFunction<? super HttpClientRequest, ? super NettyOutbound, ? extends Publisher<Void>>) allArguments[0];
             allArguments[0] = new BiFunction<HttpClientRequest, NettyOutbound, Publisher<Void>>() {
                 @Override
@@ -75,8 +70,6 @@ public class HttpClientFinalizerSendInterceptor implements InstanceMethodsAround
             };
             enhanceObjectCache.setCacheSpan(abstractSpan);
         }
-
-        enhanceObjectCache.setSpan1(span);
     }
 
     private String getPeer(URL url) {

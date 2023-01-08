@@ -22,6 +22,7 @@ import com.mongodb.bulk.DeleteRequest;
 import com.mongodb.bulk.InsertRequest;
 import com.mongodb.bulk.UpdateRequest;
 import com.mongodb.bulk.WriteRequest;
+import com.mongodb.operation.AggregateOperation;
 import com.mongodb.operation.CountOperation;
 import com.mongodb.operation.CreateCollectionOperation;
 import com.mongodb.operation.CreateIndexesOperation;
@@ -39,13 +40,14 @@ import com.mongodb.operation.MapReduceToCollectionOperation;
 import com.mongodb.operation.MapReduceWithInlineResultsOperation;
 import com.mongodb.operation.MixedBulkWriteOperation;
 import com.mongodb.operation.UpdateOperation;
-import java.util.List;
 import org.apache.skywalking.apm.plugin.mongodb.v3.MongoPluginConfig;
 import org.bson.BsonDocument;
 
+import java.util.List;
+
 @SuppressWarnings({
-    "deprecation",
-    "Duplicates"
+        "deprecation",
+        "Duplicates"
 })
 public class MongoOperationHelper {
 
@@ -101,6 +103,9 @@ public class MongoOperationHelper {
         } else if (obj instanceof FindAndReplaceOperation) {
             BsonDocument filter = ((FindAndReplaceOperation) obj).getFilter();
             return limitFilter(filter.toString());
+        } else if (obj instanceof AggregateOperation) {
+            List<BsonDocument> filters = ((AggregateOperation) obj).getPipeline();
+            return limitFilter(getFilters(filters));
         } else if (obj instanceof FindAndUpdateOperation) {
             BsonDocument filter = ((FindAndUpdateOperation) obj).getFilter();
             return limitFilter(filter.toString());
@@ -113,6 +118,18 @@ public class MongoOperationHelper {
         } else {
             return MongoConstants.EMPTY;
         }
+    }
+
+    private static String getFilters(List<BsonDocument> filters) {
+        StringBuilder params = new StringBuilder();
+        for (BsonDocument filter : filters) {
+            params.append(((BsonDocument) filter).toString()).append(",");
+            final int filterLengthLimit = MongoPluginConfig.Plugin.MongoDB.FILTER_LENGTH_LIMIT;
+            if (filterLengthLimit > 0 && params.length() > filterLengthLimit) {
+                return params.substring(0, filterLengthLimit) + "...";
+            }
+        }
+        return params.toString();
     }
 
     private static String getFilter(List<? extends WriteRequest> writeRequestList) {
