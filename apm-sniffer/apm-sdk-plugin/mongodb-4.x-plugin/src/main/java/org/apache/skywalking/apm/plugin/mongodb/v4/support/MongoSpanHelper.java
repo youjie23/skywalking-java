@@ -18,12 +18,15 @@
 
 package org.apache.skywalking.apm.plugin.mongodb.v4.support;
 
+import com.mongodb.MongoNamespace;
 import org.apache.skywalking.apm.agent.core.context.ContextCarrier;
 import org.apache.skywalking.apm.agent.core.context.ContextManager;
 import org.apache.skywalking.apm.agent.core.context.tag.Tags;
 import org.apache.skywalking.apm.agent.core.context.trace.AbstractSpan;
 import org.apache.skywalking.apm.agent.core.context.trace.SpanLayer;
 import org.apache.skywalking.apm.network.trace.component.ComponentsDefine;
+
+import java.lang.reflect.Field;
 
 public class MongoSpanHelper {
 
@@ -42,7 +45,24 @@ public class MongoSpanHelper {
         span.setComponent(ComponentsDefine.MONGO_DRIVER);
         Tags.DB_TYPE.set(span, MongoConstants.DB_TYPE);
         SpanLayer.asDB(span);
+        try {
+            Field namespaceField = operation.getClass().getDeclaredField("namespace");
+            Field.setAccessible(new Field[]{namespaceField}, true);
+            MongoNamespace namespace = (MongoNamespace) namespaceField.get(operation);
+            Tags.DB_INSTANCE.set(span, namespace.getFullName());
+        } catch (Exception e) {
+            try {
+                Field wrappedField = operation.getClass().getDeclaredField("wrapped");
+                Field.setAccessible(new Field[]{wrappedField}, true);
+                Object wrappedOperation = wrappedField.get(operation);
+                Field wrappedNamespaceField = wrappedOperation.getClass().getDeclaredField("namespace");
+                Field.setAccessible(new Field[]{wrappedNamespaceField}, true);
+                MongoNamespace wrappedNamespace = (MongoNamespace) wrappedNamespaceField.get(wrappedOperation);
+                Tags.DB_INSTANCE.set(span, wrappedNamespace.getFullName());
+            } catch (Exception e2) {
 
+            }
+        }
         if (MongoPluginConfig.Plugin.MongoDB.TRACE_PARAM) {
             Tags.DB_BIND_VARIABLES.set(span, MongoOperationHelper.getTraceParam(operation));
         }

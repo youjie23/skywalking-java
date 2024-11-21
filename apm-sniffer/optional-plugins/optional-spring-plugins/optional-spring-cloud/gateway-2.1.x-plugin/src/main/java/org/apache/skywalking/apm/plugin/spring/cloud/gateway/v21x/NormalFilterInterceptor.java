@@ -24,10 +24,10 @@ import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.EnhancedI
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.InstanceMethodsAroundInterceptor;
 import org.apache.skywalking.apm.agent.core.plugin.interceptor.enhance.MethodInterceptResult;
 import org.springframework.beans.BeanUtils;
-import org.springframework.util.StringUtils;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.ServerWebExchangeDecorator;
 import org.springframework.web.server.adapter.DefaultServerWebExchange;
+
 import java.beans.PropertyDescriptor;
 import java.lang.reflect.Method;
 
@@ -60,9 +60,9 @@ public class NormalFilterInterceptor implements InstanceMethodsAroundInterceptor
     }
 
     private String getSimpleName(Class realClass) {
-        String className  = realClass.getSimpleName();
-        if (StringUtils.hasText("$")) {
-            return  className.substring(0, className.indexOf("$"));
+        String className = realClass.getSimpleName();
+        if (className.indexOf("$") > -1) {
+            return className.substring(0, className.indexOf("$"));
         }
         return realClass.getSimpleName();
     }

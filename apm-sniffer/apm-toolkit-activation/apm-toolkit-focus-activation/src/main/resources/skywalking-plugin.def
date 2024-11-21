@@ -16,3 +16,4 @@
 
 toolkit-focus=org.apache.skywalking.apm.toolkit.activation.log.focus.MdcPutInstrumentation
 toolkit-focus=org.apache.skywalking.apm.toolkit.activation.log.focus.MdcReleaseInstrumentation
+toolkit-focus=org.apache.skywalking.apm.toolkit.activation.log.focus.LogInstrumentation

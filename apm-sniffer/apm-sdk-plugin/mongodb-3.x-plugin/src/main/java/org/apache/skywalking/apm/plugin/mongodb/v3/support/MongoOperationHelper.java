@@ -123,7 +123,7 @@ public class MongoOperationHelper {
     private static String getFilters(List<BsonDocument> filters) {
         StringBuilder params = new StringBuilder();
         for (BsonDocument filter : filters) {
-            params.append(((BsonDocument) filter).toString()).append(",");
+            params.append(filter.toString()).append(",");
             final int filterLengthLimit = MongoPluginConfig.Plugin.MongoDB.FILTER_LENGTH_LIMIT;
             if (filterLengthLimit > 0 && params.length() > filterLengthLimit) {
                 return params.substring(0, filterLengthLimit) + "...";
